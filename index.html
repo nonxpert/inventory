@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Inventory">
+<meta name="theme-color" content="#1C1F23">
+<title>Inventory</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --bg:#1C1F23; --panel:#262A2F; --panel-hi:#2F343A; --line:#3A4046;
+  --ink:#E9ECEF; --dim:#949CA5; --dimmer:#6B737B;
+  --yellow:#F2C500; --green:#43C06E; --red:#E5484D;
+  --label:'Barlow Condensed',system-ui,sans-serif;
+  --body:'IBM Plex Sans',system-ui,sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,monospace;
+  --tabh:58px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;height:100%}
+body{
+  background:var(--bg); color:var(--ink); font-family:var(--body);
+  font-size:15px; line-height:1.45; overscroll-behavior-y:none;
+}
+button,input,select,textarea{font-family:inherit;font-size:16px;color:inherit}
+button{cursor:pointer;border:none;background:none}
+
+/* ---------- shell ---------- */
+#app{display:flex;flex-direction:column;height:100dvh}
+header{
+  flex:0 0 auto; padding:calc(env(safe-area-inset-top) + 10px) 14px 10px;
+  background:var(--panel); border-bottom:1px solid var(--line);
+  display:flex; align-items:center; gap:10px;
+}
+header h1{
+  font-family:var(--label); font-weight:700; font-size:19px; letter-spacing:.09em;
+  text-transform:uppercase; margin:0; flex:1;
+}
+#status{font-family:var(--mono);font-size:11px;color:var(--dimmer)}
+#status.busy{color:var(--yellow)}
+#status.bad{color:var(--red)}
+main{flex:1 1 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:24px}
+.view{display:none;padding:12px 12px 0}
+.view.on{display:block}
+
+/* ---------- bottom tabs ---------- */
+nav{
+  flex:0 0 auto; display:flex; background:var(--panel);
+  border-top:1px solid var(--line); padding-bottom:env(safe-area-inset-bottom);
+}
+nav button{
+  flex:1; height:var(--tabh); display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:3px;
+  font-family:var(--label); font-size:12px; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--dim);
+  border-top:2px solid transparent; margin-top:-1px;
+}
+nav button .dot{width:6px;height:6px;border-radius:50%;background:var(--dimmer)}
+nav button.on{color:var(--ink);border-top-color:var(--yellow)}
+nav button.on .dot{background:var(--yellow);box-shadow:0 0 8px var(--yellow)}
+nav button .badge{
+  position:absolute;transform:translate(22px,-14px);
+  background:var(--yellow);color:#000;font-family:var(--mono);font-size:10px;
+  font-weight:600;border-radius:9px;padding:1px 5px;
+}
+
+/* ---------- controls ---------- */
+.search{
+  width:100%;padding:12px 14px;background:var(--panel);border:1px solid var(--line);
+  border-radius:8px;font-size:16px;margin-bottom:10px;
+}
+.search::placeholder{color:var(--dimmer)}
+.chips{display:flex;gap:7px;overflow-x:auto;padding-bottom:10px;margin-bottom:4px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{
+  flex:0 0 auto;padding:7px 13px;background:var(--panel);border:1px solid var(--line);
+  border-radius:20px;font-family:var(--label);font-size:13px;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--dim);white-space:nowrap;
+}
+.chip.on{background:var(--yellow);border-color:var(--yellow);color:#000;font-weight:700}
+.btn{
+  display:block;width:100%;padding:14px;border-radius:8px;text-align:center;
+  font-family:var(--label);font-size:16px;letter-spacing:.09em;text-transform:uppercase;
+  font-weight:700;background:var(--panel-hi);border:1px solid var(--line);margin-bottom:9px;
+}
+.btn.primary{background:var(--yellow);color:#000;border-color:var(--yellow)}
+.btn.danger{background:transparent;color:var(--red);border-color:var(--red)}
+.btn:disabled{opacity:.4}
+.row2{display:flex;gap:9px}
+.row2 .btn{margin-bottom:9px}
+
+/* ---------- part rows ---------- */
+.cat-head{
+  font-family:var(--label);font-size:13px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--dim);margin:18px 0 7px;display:flex;justify-content:space-between;
+}
+.part{
+  display:flex;align-items:center;gap:11px;background:var(--panel);
+  border:1px solid var(--line);border-left-width:4px;border-radius:7px;
+  padding:11px 12px;margin-bottom:7px;
+}
+.part .info{flex:1;min-width:0}
+.part .pn{font-family:var(--mono);font-size:14px;font-weight:600;letter-spacing:.01em}
+.part .desc{
+  font-size:12.5px;color:var(--dim);margin-top:2px;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+}
+.part .right{text-align:right;flex:0 0 auto}
+.part .qty{font-family:var(--mono);font-size:20px;font-weight:600;line-height:1}
+.part .qty.zero{color:var(--red)}
+.part .price{font-family:var(--mono);font-size:11px;color:var(--dimmer);margin-top:3px}
+.part.sel{background:var(--panel-hi);border-color:var(--yellow)}
+
+.check{
+  flex:0 0 auto;width:26px;height:26px;border:2px solid var(--line);border-radius:5px;
+  display:flex;align-items:center;justify-content:center;font-size:15px;color:#000;
+}
+.check.on{background:var(--yellow);border-color:var(--yellow)}
+
+.stepper{display:flex;align-items:center;gap:0;margin-left:auto;flex:0 0 auto}
+.stepper button{
+  width:38px;height:38px;background:var(--panel-hi);border:1px solid var(--line);
+  font-size:21px;line-height:1;display:flex;align-items:center;justify-content:center;
+}
+.stepper button:first-child{border-radius:7px 0 0 7px}
+.stepper button:last-child{border-radius:0 7px 7px 0}
+.stepper input{
+  width:52px;height:38px;text-align:center;background:var(--bg);
+  border:1px solid var(--line);border-left:none;border-right:none;
+  font-family:var(--mono);font-size:16px;font-weight:600;
+}
+
+/* ---------- forms ---------- */
+label.f{display:block;margin:13px 0 5px;font-family:var(--label);font-size:13px;
+  letter-spacing:.11em;text-transform:uppercase;color:var(--dim)}
+input.f,select.f,textarea.f{
+  width:100%;padding:12px;background:var(--panel);border:1px solid var(--line);
+  border-radius:7px;
+}
+textarea.f{min-height:70px;resize:vertical;font-family:var(--body)}
+
+/* ---------- misc ---------- */
+.empty{text-align:center;color:var(--dim);padding:48px 24px;font-size:14px}
+.empty strong{display:block;font-family:var(--label);font-size:17px;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--ink);margin-bottom:7px}
+.bar{
+  position:sticky;bottom:0;background:var(--panel);border-top:1px solid var(--line);
+  margin:14px -12px 0;padding:11px 12px;display:flex;align-items:center;gap:11px;
+}
+.bar .sum{flex:1;font-family:var(--mono);font-size:13px}
+.bar .sum b{font-size:16px}
+.bar .btn{width:auto;padding:12px 20px;margin:0}
+.note{font-size:12.5px;color:var(--dim);margin:8px 0}
+.err{background:rgba(229,72,77,.12);border:1px solid var(--red);color:#FFB3B5;
+  padding:11px;border-radius:7px;font-size:13.5px;margin:10px 0}
+.ok{background:rgba(67,192,110,.12);border:1px solid var(--green);color:#A8E6C0;
+  padding:11px;border-radius:7px;font-size:13.5px;margin:10px 0}
+video{width:100%;border-radius:8px;background:#000;margin-bottom:10px}
+.sheet{
+  position:fixed;inset:0;background:var(--bg);z-index:50;display:none;
+  flex-direction:column;padding:calc(env(safe-area-inset-top) + 14px) 14px
+    calc(env(safe-area-inset-bottom) + 14px);overflow-y:auto;
+}
+.sheet.on{display:flex}
+.sheet h2{font-family:var(--label);font-size:21px;letter-spacing:.09em;
+  text-transform:uppercase;margin:0 0 4px}
+.mini{
+  display:grid;grid-template-columns:1fr 62px 76px;gap:7px;align-items:center;
+  padding:9px 0;border-bottom:1px solid var(--line);
+}
+.mini input{padding:8px;background:var(--panel);border:1px solid var(--line);
+  border-radius:6px;font-family:var(--mono);font-size:14px;width:100%}
+.mini .pn{font-family:var(--mono);font-size:13px;font-weight:600}
+.mini .desc{font-size:11.5px;color:var(--dim);
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.hd{font-family:var(--label);font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--dimmer);border:none}
+
+/* ---------- pick list (print) ---------- */
+#picklist{display:none}
+@media print{
+  body{background:#fff;color:#000}
+  #app,.sheet{display:none !important}
+  #picklist{display:block !important;padding:0;font-family:var(--body)}
+  #picklist h1{font-family:var(--label);letter-spacing:.09em;text-transform:uppercase}
+  #picklist table{width:100%;border-collapse:collapse;margin-top:14px}
+  #picklist th,#picklist td{border:1px solid #000;padding:6px 8px;text-align:left;font-size:12px}
+  #picklist th{background:#eee;font-family:var(--label);text-transform:uppercase;letter-spacing:.06em}
+  #picklist .m{font-family:var(--mono)}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none !important;transition:none !important}}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <header>
+    <h1>Inventory</h1>
+    <span id="status">—</span>
+  </header>
+
+  <main>
+    <!-- ============ INVENTORY ============ -->
+    <section class="view on" id="v-inv">
+      <input class="search" id="inv-q" placeholder="Search part number or description" autocapitalize="characters">
+      <div class="chips" id="inv-chips"></div>
+      <div id="inv-list"></div>
+    </section>
+
+    <!-- ============ RECEIVE ============ -->
+    <section class="view" id="v-recv">
+      <button class="btn primary" onclick="startScan('recv')">Scan barcode</button>
+      <div class="row2">
+        <button class="btn" onclick="document.getElementById('pdf-in').click()">Upload order PDF</button>
+        <button class="btn" onclick="manualAdd()">Add by hand</button>
+      </div>
+      <input type="file" id="pdf-in" accept="application/pdf" hidden onchange="onPdf(event)">
+      <p class="note">Scanning or uploading builds a list below. Nothing changes your stock until you commit it.</p>
+      <div id="recv-list"></div>
+    </section>
+
+    <!-- ============ PULL ============ -->
+    <section class="view" id="v-pull">
+      <button class="btn" onclick="startScan('pull')">Scan barcode</button>
+      <input class="search" id="pull-q" placeholder="Search part number or description" autocapitalize="characters">
+      <div class="chips" id="pull-chips"></div>
+      <div id="pull-list"></div>
+    </section>
+
+    <!-- ============ PROJECTS ============ -->
+    <section class="view" id="v-proj">
+      <button class="btn primary" onclick="newProject()">New project</button>
+      <div id="proj-list"></div>
+    </section>
+  </main>
+
+  <nav>
+    <button class="on" data-tab="inv"  onclick="tab('inv')"><span class="dot"></span>Inventory</button>
+    <button data-tab="recv" onclick="tab('recv')"><span class="dot"></span>Receive</button>
+    <button data-tab="pull" onclick="tab('pull')"><span class="dot"></span>Pull</button>
+    <button data-tab="proj" onclick="tab('proj')"><span class="dot"></span>Projects</button>
+  </nav>
+</div>
+
+<!-- ============ scanner ============ -->
+<div class="sheet" id="s-scan">
+  <h2>Scan</h2>
+  <p class="note" id="scan-hint">Point the camera at the barcode on the bag or box.</p>
+  <video id="scan-video" playsinline muted></video>
+  <div id="scan-log"></div>
+  <button class="btn" onclick="stopScan()">Done</button>
+</div>
+
+<!-- ============ review parsed PDF ============ -->
+<div class="sheet" id="s-review">
+  <h2>Check this order</h2>
+  <p class="note" id="review-src"></p>
+  <div class="mini hd"><span>Part</span><span>Qty</span><span>Price</span></div>
+  <div id="review-rows"></div>
+  <button class="btn primary" onclick="acceptReview()">Add these to the receiving list</button>
+  <button class="btn" onclick="closeSheet('s-review')">Cancel</button>
+</div>
+
+<!-- ============ checkout ============ -->
+<div class="sheet" id="s-checkout">
+  <h2>Pull parts</h2>
+  <div id="checkout-lines"></div>
+  <label class="f" for="co-job">Job name</label>
+  <input class="f" id="co-job" placeholder="e.g. Moreman Gin — dryer panel">
+  <label class="f" for="co-cust">Customer</label>
+  <input class="f" id="co-cust" placeholder="Company name">
+  <label class="f" for="co-who">Pulled by</label>
+  <input class="f" id="co-who" placeholder="Your name">
+  <label class="f" for="co-proj">Project (optional)</label>
+  <select class="f" id="co-proj"></select>
+  <label class="f" for="co-note">Notes</label>
+  <textarea class="f" id="co-note" placeholder="Anything worth remembering later"></textarea>
+  <div id="co-msg"></div>
+  <button class="btn primary" onclick="submitPull()">Confirm and deduct stock</button>
+  <button class="btn" onclick="closeSheet('s-checkout')">Back</button>
+</div>
+
+<!-- ============ project editor ============ -->
+<div class="sheet" id="s-project">
+  <h2 id="proj-title">New project</h2>
+  <label class="f" for="pj-name">Project name</label>
+  <input class="f" id="pj-name" placeholder="e.g. Lariat Gin — press control">
+  <label class="f" for="pj-status">Status</label>
+  <select class="f" id="pj-status">
+    <option>Open</option><option>On hold</option><option>Complete</option>
+  </select>
+  <label class="f" for="pj-notes">Notes</label>
+  <textarea class="f" id="pj-notes"></textarea>
+  <div id="pj-items"></div>
+  <div id="pj-msg"></div>
+  <button class="btn primary" onclick="saveProject()">Save project</button>
+  <button class="btn" onclick="closeSheet('s-project')">Back</button>
+</div>
+
+<!-- ============ printable pick list ============ -->
+<div id="picklist"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.20.0/umd/index.min.js"></script>
+<script>
+/* ==================================================================
+   CONFIG — fill in API_URL only. The passphrase is NOT stored here;
+   the app asks each phone for it once and remembers it on that device.
+   ================================================================== */
+const API_URL = 'https://script.google.com/macros/s/AKfycbwS2AidaWvAv3aIuYHyBJ28zIVdFbdDumjUc5s3Zg5s3uQ6eu8zSYJrjtDINCVu5prf/exec';
+let SECRET = localStorage.getItem('secret') || '';
+/* ================================================================== */
+
+function askSecret(message) {
+  const s = prompt(message || 'Passphrase for this inventory\n(ask whoever set it up)');
+  if (s && s.trim()) {
+    SECRET = s.trim();
+    localStorage.setItem('secret', SECRET);
+    return true;
+  }
+  return false;
+}
+
+function forgetSecret() {
+  localStorage.removeItem('secret');
+  SECRET = '';
+}
+
+if (window.pdfjsLib) {
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+}
+
+let DATA = { parts: [], projects: [], projectItems: [], categories: [] };
+let recvQueue = [];        // staged incoming stock
+let pullSel   = {};        // partNumber -> qty
+let reviewRows = [];
+let editingProject = null;
+let scanTarget = null, codeReader = null;
+
+const $  = id => document.getElementById(id);
+const money = n => '$' + (Number(n) || 0).toFixed(2);
+const esc = s => String(s == null ? '' : s)
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+/* ---------------- category colour: stable hue per category ------- */
+function catHue(name) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360;
+  return h;
+}
+const catColor = name => `hsl(${catHue(name)} 55% 52%)`;
+
+/* ---------------- server ----------------------------------------- */
+function setStatus(text, cls) {
+  const el = $('status');
+  el.textContent = text;
+  el.className = cls || '';
+}
+
+async function apiGet() {
+  if (!SECRET && !askSecret()) { setStatus('locked', 'bad'); return; }
+  setStatus('syncing…', 'busy');
+  try {
+    const r = await fetch(`${API_URL}?secret=${encodeURIComponent(SECRET)}`);
+    const j = await r.json();
+    if (!j.ok) {
+      if (/secret/i.test(j.error || '')) {
+        forgetSecret();
+        setStatus('wrong passphrase', 'bad');
+        if (askSecret('That passphrase was wrong. Try again.')) return apiGet();
+        return;
+      }
+      throw new Error(j.error);
+    }
+    DATA = j;
+    setStatus('synced ' + new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}));
+    renderAll();
+  } catch (e) {
+    setStatus('offline', 'bad');
+    console.error(e);
+  }
+}
+
+// text/plain keeps this a "simple request" so Apps Script never sees a preflight.
+async function apiPost(body) {
+  setStatus('saving…', 'busy');
+  try {
+    const r = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(Object.assign({ secret: SECRET }, body))
+    });
+    const j = await r.json();
+    setStatus(j.ok ? 'saved' : 'error', j.ok ? '' : 'bad');
+    return j;
+  } catch (e) {
+    setStatus('offline', 'bad');
+    return { ok: false, error: 'No connection. Nothing was saved — try again on signal.' };
+  }
+}
+
+/* ---------------- navigation ------------------------------------- */
+function tab(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('on'));
+  $('v-' + name).classList.add('on');
+  document.querySelectorAll('nav button').forEach(b =>
+    b.classList.toggle('on', b.dataset.tab === name));
+  document.querySelector('main').scrollTop = 0;
+}
+const openSheet  = id => $(id).classList.add('on');
+const closeSheet = id => $(id).classList.remove('on');
+
+/* ---------------- rendering -------------------------------------- */
+function renderAll() { renderInventory(); renderPull(); renderProjects(); renderRecv(); }
+
+function groupByCategory(parts) {
+  const g = {};
+  parts.forEach(p => {
+    const c = p.category || 'Uncategorized';
+    (g[c] = g[c] || []).push(p);
+  });
+  return Object.keys(g).sort().map(c => ({
+    cat: c,
+    items: g[c].sort((a, b) => String(a.partNumber).localeCompare(String(b.partNumber)))
+  }));
+}
+
+function filterParts(query, cat) {
+  const q = (query || '').trim().toUpperCase();
+  return DATA.parts.filter(p => {
+    if (cat && cat !== 'All' && (p.category || 'Uncategorized') !== cat) return false;
+    if (!q) return true;
+    return String(p.partNumber).toUpperCase().includes(q) ||
+           String(p.description).toUpperCase().includes(q);
+  });
+}
+
+function renderChips(hostId, activeCat, onPick) {
+  const cats = ['All', ...new Set(DATA.parts.map(p => p.category || 'Uncategorized'))].sort(
+    (a, b) => a === 'All' ? -1 : b === 'All' ? 1 : a.localeCompare(b));
+  const host = $(hostId);
+  host.innerHTML = '';
+  cats.forEach(c => {
+    const b = document.createElement('button');
+    b.className = 'chip' + (c === activeCat ? ' on' : '');
+    b.textContent = c;
+    b.onclick = () => onPick(c);
+    host.appendChild(b);
+  });
+}
+
+let invCat = 'All', pullCat = 'All';
+
+function renderInventory() {
+  renderChips('inv-chips', invCat, c => { invCat = c; renderInventory(); });
+  const parts = filterParts($('inv-q').value, invCat);
+  const host = $('inv-list');
+
+  if (!parts.length) {
+    host.innerHTML = `<div class="empty"><strong>Nothing here yet</strong>
+      Receive an order or scan a box to start building your stock list.</div>`;
+    return;
+  }
+
+  const totalValue = parts.reduce((s, p) => s + (Number(p.qty) || 0) * (Number(p.unitPrice) || 0), 0);
+  host.innerHTML = groupByCategory(parts).map(g => `
+    <div class="cat-head"><span>${esc(g.cat)}</span><span>${g.items.length}</span></div>
+    ${g.items.map(p => `
+      <div class="part" style="border-left-color:${catColor(g.cat)}">
+        <div class="info">
+          <div class="pn">${esc(p.partNumber)}</div>
+          <div class="desc">${esc(p.description)}</div>
+        </div>
+        <div class="right">
+          <div class="qty ${Number(p.qty) <= 0 ? 'zero' : ''}">${Number(p.qty) || 0}</div>
+          <div class="price">${money(p.unitPrice)} ea</div>
+        </div>
+      </div>`).join('')}
+  `).join('') + `<div class="cat-head" style="margin-top:22px">
+      <span>Total value on hand</span><span>${money(totalValue)}</span></div>`;
+}
+
+function renderPull() {
+  renderChips('pull-chips', pullCat, c => { pullCat = c; renderPull(); });
+  const parts = filterParts($('pull-q').value, pullCat);
+  const host = $('pull-list');
+
+  if (!parts.length) {
+    host.innerHTML = `<div class="empty"><strong>No matches</strong>
+      Try a different search, or check the Inventory tab.</div>`;
+    return;
+  }
+
+  host.innerHTML = groupByCategory(parts).map(g => `
+    <div class="cat-head"><span>${esc(g.cat)}</span></div>
+    ${g.items.map(p => {
+      const pn = String(p.partNumber);
+      const on = pullSel[pn] != null;
+      const have = Number(p.qty) || 0;
+      return `
+      <div class="part ${on ? 'sel' : ''}" style="border-left-color:${catColor(g.cat)}">
+        <div class="check ${on ? 'on' : ''}" onclick="togglePull('${esc(pn)}')">${on ? '✓' : ''}</div>
+        <div class="info" onclick="togglePull('${esc(pn)}')">
+          <div class="pn">${esc(pn)}</div>
+          <div class="desc">${have} on hand · ${money(p.unitPrice)} ea</div>
+        </div>
+        ${on ? `<div class="stepper">
+          <button onclick="bumpPull('${esc(pn)}',-1)">−</button>
+          <input type="number" inputmode="numeric" value="${pullSel[pn]}" min="1" max="${have}"
+                 onchange="setPull('${esc(pn)}',this.value)">
+          <button onclick="bumpPull('${esc(pn)}',1)">+</button>
+        </div>` : `<div class="right"><div class="qty ${have <= 0 ? 'zero' : ''}">${have}</div></div>`}
+      </div>`;
+    }).join('')}
+  `).join('');
+
+  const keys = Object.keys(pullSel);
+  if (keys.length) {
+    const total = keys.reduce((s, pn) => {
+      const p = DATA.parts.find(x => String(x.partNumber) === pn);
+      return s + (pullSel[pn] * (Number(p && p.unitPrice) || 0));
+    }, 0);
+    host.innerHTML += `<div class="bar">
+      <div class="sum">${keys.length} item${keys.length > 1 ? 's' : ''}<br><b>${money(total)}</b></div>
+      <button class="btn primary" onclick="openCheckout()">Review</button>
+    </div>`;
+  }
+}
+
+function togglePull(pn) {
+  if (pullSel[pn] != null) delete pullSel[pn];
+  else {
+    const p = DATA.parts.find(x => String(x.partNumber) === pn);
+    if ((Number(p && p.qty) || 0) <= 0) { alert(pn + ' has none on hand.'); return; }
+    pullSel[pn] = 1;
+  }
+  renderPull();
+}
+function bumpPull(pn, d) { setPull(pn, (pullSel[pn] || 0) + d); }
+function setPull(pn, v) {
+  const p = DATA.parts.find(x => String(x.partNumber) === pn);
+  const have = Number(p && p.qty) || 0;
+  let n = Math.max(1, Math.min(have, Math.round(Number(v) || 1)));
+  pullSel[pn] = n;
+  renderPull();
+}
+
+/* ---------------- receive queue ---------------------------------- */
+function renderRecv() {
+  const host = $('recv-list');
+  if (!recvQueue.length) { host.innerHTML = ''; return; }
+  const total = recvQueue.reduce((s, l) => s + l.qty * l.unitPrice, 0);
+  host.innerHTML = `<div class="cat-head"><span>Ready to receive</span><span>${recvQueue.length}</span></div>` +
+    recvQueue.map((l, i) => `
+      <div class="part" style="border-left-color:var(--green)">
+        <div class="info">
+          <div class="pn">${esc(l.partNumber)}</div>
+          <div class="desc">${esc(l.description) || 'No description yet'}</div>
+        </div>
+        <div class="stepper">
+          <button onclick="bumpRecv(${i},-1)">−</button>
+          <input type="number" inputmode="numeric" value="${l.qty}" min="1"
+                 onchange="recvQueue[${i}].qty=Math.max(1,Math.round(+this.value||1));renderRecv()">
+          <button onclick="bumpRecv(${i},1)">+</button>
+        </div>
+      </div>`).join('') +
+    `<div class="bar">
+      <div class="sum">${recvQueue.length} line${recvQueue.length > 1 ? 's' : ''}<br><b>${money(total)}</b></div>
+      <button class="btn primary" onclick="commitRecv()">Add to stock</button>
+    </div>
+    <button class="btn danger" onclick="recvQueue=[];renderRecv()">Clear list</button>`;
+}
+function bumpRecv(i, d) {
+  recvQueue[i].qty = Math.max(1, recvQueue[i].qty + d);
+  renderRecv();
+}
+
+function queueReceive(partNumber, description, qty, unitPrice, orderNumber) {
+  const pn = String(partNumber).trim().toUpperCase();
+  const found = recvQueue.find(l => l.partNumber === pn);
+  if (found) found.qty += (qty || 1);
+  else {
+    const known = DATA.parts.find(p => String(p.partNumber).toUpperCase() === pn);
+    recvQueue.push({
+      partNumber: pn,
+      description: description || (known ? known.description : ''),
+      qty: qty || 1,
+      unitPrice: unitPrice != null ? unitPrice : (known ? Number(known.unitPrice) || 0 : 0),
+      orderNumber: orderNumber || ''
+    });
+  }
+  renderRecv();
+}
+
+async function commitRecv() {
+  const who = askWho();
+  if (!who) return;
+  const r = await apiPost({
+    action: 'receive', lines: recvQueue, who,
+    orderNumber: recvQueue[0] && recvQueue[0].orderNumber || ''
+  });
+  if (!r.ok) { alert(r.error); return; }
+  recvQueue = [];
+  renderRecv();
+  await apiGet();
+  tab('inv');
+}
+
+function manualAdd() {
+  const pn = prompt('Part number');
+  if (!pn) return;
+  const qty = Math.max(1, Math.round(Number(prompt('Quantity', '1')) || 1));
+  const known = DATA.parts.find(p => String(p.partNumber).toUpperCase() === pn.trim().toUpperCase());
+  const desc = known ? known.description : (prompt('Description') || '');
+  const price = known ? Number(known.unitPrice) || 0
+                      : Number(prompt('Unit price (leave blank if unknown)', '0')) || 0;
+  queueReceive(pn, desc, qty, price);
+}
+
+function askWho() {
+  let who = localStorage.getItem('who') || '';
+  if (!who) {
+    who = prompt('Your name (so the log knows who did this)') || '';
+    if (who) localStorage.setItem('who', who);
+  }
+  return who;
+}
+
+/* ---------------- barcode scanning ------------------------------- */
+// AD labels read like  P1AM-SERIAL+0323FB  — part number, then a lot code.
+function cleanBarcode(raw) {
+  return String(raw).trim().toUpperCase().split('+')[0].trim();
+}
+
+async function startScan(target) {
+  scanTarget = target;
+  $('scan-hint').textContent = target === 'recv'
+    ? 'Each scan adds one to the receiving list.'
+    : 'Each scan adds one to the pull list.';
+  $('scan-log').innerHTML = '';
+  openSheet('s-scan');
+  try {
+    codeReader = new ZXing.BrowserMultiFormatReader();
+    await codeReader.decodeFromConstraints(
+      { video: { facingMode: { ideal: 'environment' } } },
+      'scan-video',
+      (result) => { if (result) onScan(result.getText()); }
+    );
+  } catch (e) {
+    $('scan-log').innerHTML = `<div class="err">Camera didn't start. ${esc(e.message || e)}
+      <br><br>The page must be on https, and Safari has to have camera permission.</div>`;
+  }
+}
+
+function stopScan() {
+  if (codeReader) { try { codeReader.reset(); } catch (e) {} codeReader = null; }
+  closeSheet('s-scan');
+  renderAll();
+}
+
+let lastScan = { code: '', at: 0 };
+function onScan(raw) {
+  const pn = cleanBarcode(raw);
+  const now = Date.now();
+  if (pn === lastScan.code && now - lastScan.at < 2500) return;  // debounce the same box
+  lastScan = { code: pn, at: now };
+  if (navigator.vibrate) navigator.vibrate(45);
+
+  const known = DATA.parts.find(p => String(p.partNumber).toUpperCase() === pn);
+
+  if (scanTarget === 'recv') {
+    queueReceive(pn, known ? known.description : '', 1, known ? Number(known.unitPrice) || 0 : 0);
+    log(`<div class="ok"><b>${esc(pn)}</b> — added to receiving${known ? '' : ' (new part)'}</div>`);
+  } else {
+    if (!known) { log(`<div class="err"><b>${esc(pn)}</b> isn't in inventory yet.</div>`); return; }
+    const have = Number(known.qty) || 0;
+    const want = (pullSel[pn] || 0) + 1;
+    if (want > have) { log(`<div class="err"><b>${esc(pn)}</b> — only ${have} on hand.</div>`); return; }
+    pullSel[pn] = want;
+    log(`<div class="ok"><b>${esc(pn)}</b> — pulling ${want}</div>`);
+  }
+}
+function log(html) {
+  $('scan-log').insertAdjacentHTML('afterbegin', html);
+}
+
+/* ---------------- PDF order parsing ------------------------------ */
+async function onPdf(ev) {
+  const file = ev.target.files[0];
+  ev.target.value = '';
+  if (!file) return;
+  setStatus('reading pdf…', 'busy');
+  try {
+    const lines = await pdfLines(file);
+    const parsed = extractLineItems(lines);
+    if (!parsed.items.length) {
+      alert("Couldn't find a line-item table in that PDF. Use \u201cAdd by hand\u201d, and send the file to Claude so the parser can be taught this layout.");
+      setStatus('synced');
+      return;
+    }
+    reviewRows = parsed.items;
+    $('review-src').textContent = parsed.orderNumber
+      ? `Order #${parsed.orderNumber} · ${parsed.items.length} line${parsed.items.length > 1 ? 's' : ''} found. Fix anything that looks wrong.`
+      : `${parsed.items.length} line(s) found. Fix anything that looks wrong.`;
+    renderReview();
+    openSheet('s-review');
+    setStatus('synced');
+  } catch (e) {
+    console.error(e);
+    alert('That PDF could not be read. ' + (e.message || ''));
+    setStatus('synced');
+  }
+}
+
+// Rebuild visual lines from pdf.js text items using their y positions.
+async function pdfLines(file) {
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  const out = [];
+  for (let n = 1; n <= pdf.numPages; n++) {
+    const page = await pdf.getPage(n);
+    const tc = await page.getTextContent();
+    const rows = [];
+    tc.items.forEach(it => {
+      const y = it.transform[5], x = it.transform[4];
+      let row = rows.find(r => Math.abs(r.y - y) <= 2.5);
+      if (!row) { row = { y, cells: [] }; rows.push(row); }
+      row.cells.push({ x, s: it.str });
+    });
+    rows.sort((a, b) => b.y - a.y).forEach(r => {
+      const text = r.cells.sort((a, b) => a.x - b.x).map(c => c.s)
+        .join(' ').replace(/\s+/g, ' ').trim();
+      if (text) out.push(text);
+    });
+  }
+  return out;
+}
+
+const MONEY_TAIL = /\$\s*([\d,]+\.\d{2})\s+(\d+)\s+\$\s*([\d,]+\.\d{2})\s*$/;
+const PART_LINE  = /^[A-Z0-9][A-Z0-9\-\.\/]{2,29}$/;
+
+function extractLineItems(lines) {
+  const items = [];
+  let orderNumber = '';
+
+  lines.forEach(l => {
+    const m = l.match(/ORDER\s*#\s*:?\s*(\d{4,})/i);
+    if (m && !orderNumber) orderNumber = m[1];
+  });
+
+  let start = lines.findIndex(l => /item\s*code/i.test(l) && /description/i.test(l));
+  if (start < 0) start = 0;
+  let end = lines.findIndex((l, i) => i > start && /sub\s*total/i.test(l));
+  if (end < 0) end = lines.length;
+
+  let pending = null;
+  for (let i = start + 1; i < end; i++) {
+    const line = lines[i].trim();
+    if (!line || /^\(US \$\)$/i.test(line)) continue;
+
+    // A bare token on its own line is the item code.
+    if (PART_LINE.test(line) && /[0-9\-]/.test(line) && !MONEY_TAIL.test(line)) {
+      if (pending) items.push(pending);
+      pending = { partNumber: line.toUpperCase(), description: '', qty: 1, unitPrice: 0, orderNumber };
+      continue;
+    }
+    // Fallback: item code and description landed on one line together.
+    if (!pending) {
+      const first = line.split(' ')[0];
+      if (PART_LINE.test(first) && /[0-9\-]/.test(first)) {
+        pending = { partNumber: first.toUpperCase(),
+                    description: line.slice(first.length).trim(),
+                    qty: 1, unitPrice: 0, orderNumber };
+        const mm = pending.description.match(MONEY_TAIL);
+        if (mm) {
+          pending.unitPrice = Number(mm[1].replace(/,/g, ''));
+          pending.qty = Number(mm[2]);
+          pending.description = pending.description.replace(MONEY_TAIL, '').trim();
+          items.push(pending);
+          pending = null;
+        }
+      }
+      continue;
+    }
+
+    const m = line.match(MONEY_TAIL);
+    if (m) {
+      pending.unitPrice = Number(m[1].replace(/,/g, ''));
+      pending.qty = Number(m[2]);
+      const text = line.replace(MONEY_TAIL, '').trim();
+      if (text) pending.description = (pending.description + ' ' + text).trim();
+      items.push(pending);
+      pending = null;
+    } else {
+      pending.description = (pending.description + ' ' + line).trim();
+    }
+  }
+  if (pending) items.push(pending);
+  return { items, orderNumber };
+}
+
+function renderReview() {
+  $('review-rows').innerHTML = reviewRows.map((r, i) => `
+    <div class="mini">
+      <div>
+        <div class="pn">${esc(r.partNumber)}</div>
+        <div class="desc">${esc(r.description)}</div>
+      </div>
+      <input type="number" inputmode="numeric" value="${r.qty}"
+             onchange="reviewRows[${i}].qty=Math.max(0,Math.round(+this.value||0))">
+      <input type="number" inputmode="decimal" step="0.01" value="${r.unitPrice}"
+             onchange="reviewRows[${i}].unitPrice=+this.value||0">
+    </div>`).join('');
+}
+
+function acceptReview() {
+  reviewRows.filter(r => r.qty > 0)
+            .forEach(r => queueReceive(r.partNumber, r.description, r.qty, r.unitPrice, r.orderNumber));
+  closeSheet('s-review');
+  reviewRows = [];
+}
+
+/* ---------------- checkout --------------------------------------- */
+function openCheckout() {
+  const lines = Object.keys(pullSel).map(pn => {
+    const p = DATA.parts.find(x => String(x.partNumber) === pn) || {};
+    return { partNumber: pn, description: p.description || '',
+             qty: pullSel[pn], unitPrice: Number(p.unitPrice) || 0 };
+  });
+  const total = lines.reduce((s, l) => s + l.qty * l.unitPrice, 0);
+
+  $('checkout-lines').innerHTML =
+    `<div class="mini hd"><span>Part</span><span>Qty</span><span>Value</span></div>` +
+    lines.map(l => `<div class="mini">
+      <div><div class="pn">${esc(l.partNumber)}</div><div class="desc">${esc(l.description)}</div></div>
+      <div class="pn" style="text-align:center">${l.qty}</div>
+      <div class="pn" style="text-align:right">${money(l.qty * l.unitPrice)}</div>
+    </div>`).join('') +
+    `<div class="mini"><div class="hd">Total</div><div></div>
+      <div class="pn" style="text-align:right">${money(total)}</div></div>`;
+
+  $('co-who').value = localStorage.getItem('who') || '';
+  $('co-proj').innerHTML = '<option value="">— none —</option>' +
+    DATA.projects.filter(p => p.status !== 'Complete')
+      .map(p => `<option value="${esc(p.projectId)}">${esc(p.name)}</option>`).join('');
+  $('co-msg').innerHTML = '';
+  openSheet('s-checkout');
+}
+
+async function submitPull() {
+  const job = $('co-job').value.trim();
+  if (!job) { $('co-msg').innerHTML = '<div class="err">Add a job name so this pull is traceable.</div>'; return; }
+  const who = $('co-who').value.trim();
+  if (!who) { $('co-msg').innerHTML = '<div class="err">Add your name.</div>'; return; }
+  localStorage.setItem('who', who);
+
+  const lines = Object.keys(pullSel).map(pn => ({ partNumber: pn, qty: pullSel[pn] }));
+  const meta = {
+    job, who,
+    customer: $('co-cust').value.trim(),
+    project:  $('co-proj').value,
+    note:     $('co-note').value.trim()
+  };
+
+  const r = await apiPost(Object.assign({ action: 'pull', lines }, meta));
+  if (!r.ok) { $('co-msg').innerHTML = `<div class="err">${esc(r.error)}</div>`; return; }
+
+  buildPickList(meta, r.total);
+  pullSel = {};
+  closeSheet('s-checkout');
+  ['co-job','co-cust','co-note'].forEach(id => $(id).value = '');
+  await apiGet();
+  setTimeout(() => window.print(), 350);
+}
+
+function buildPickList(meta, total) {
+  const lines = Object.keys(pullSel).map(pn => {
+    const p = DATA.parts.find(x => String(x.partNumber) === pn) || {};
+    return { pn, desc: p.description || '', qty: pullSel[pn], price: Number(p.unitPrice) || 0 };
+  });
+  $('picklist').innerHTML = `
+    <h1>Pick list</h1>
+    <p><b>Job:</b> ${esc(meta.job)}<br>
+       <b>Customer:</b> ${esc(meta.customer || '—')}<br>
+       <b>Pulled by:</b> ${esc(meta.who)}<br>
+       <b>Date:</b> ${new Date().toLocaleString()}</p>
+    <table><thead><tr><th>Part number</th><th>Description</th><th>Qty</th><th>Ea</th><th>Total</th></tr></thead>
+    <tbody>${lines.map(l => `<tr>
+      <td class="m">${esc(l.pn)}</td><td>${esc(l.desc)}</td>
+      <td class="m">${l.qty}</td><td class="m">${money(l.price)}</td>
+      <td class="m">${money(l.qty * l.price)}</td></tr>`).join('')}
+    </tbody></table>
+    <p style="text-align:right;font-weight:600">Job material total: ${money(total)}</p>
+    ${meta.note ? `<p><b>Notes:</b> ${esc(meta.note)}</p>` : ''}`;
+}
+
+/* ---------------- projects --------------------------------------- */
+function renderProjects() {
+  const host = $('proj-list');
+  if (!DATA.projects.length) {
+    host.innerHTML = `<div class="empty"><strong>No projects yet</strong>
+      Create one, then tag pulls to it to see what a job has cost so far.</div>`;
+    return;
+  }
+  host.innerHTML = DATA.projects.map(p => {
+    const spent = (DATA.transactions || [])
+      .filter(t => String(t.project) === String(p.projectId))
+      .reduce((s, t) => s + (Number(t.extended) || 0), 0);
+    return `<div class="part" style="border-left-color:${
+        p.status === 'Complete' ? 'var(--green)' : 'var(--yellow)'}"
+        onclick="editProject('${esc(p.projectId)}')">
+      <div class="info">
+        <div class="pn">${esc(p.name)}</div>
+        <div class="desc">${esc(p.status)} · pulled to date ${money(spent)}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function newProject() {
+  editingProject = null;
+  $('proj-title').textContent = 'New project';
+  $('pj-name').value = ''; $('pj-status').value = 'Open'; $('pj-notes').value = '';
+  $('pj-items').innerHTML = '';
+  $('pj-msg').innerHTML = '';
+  openSheet('s-project');
+}
+
+function editProject(id) {
+  const p = DATA.projects.find(x => String(x.projectId) === String(id));
+  if (!p) return;
+  editingProject = id;
+  $('proj-title').textContent = p.name;
+  $('pj-name').value = p.name;
+  $('pj-status').value = p.status || 'Open';
+  $('pj-notes').value = p.notes || '';
+  $('pj-msg').innerHTML = '';
+
+  const used = (DATA.transactions || []).filter(t => String(t.project) === String(id));
+  $('pj-items').innerHTML = used.length ? `
+    <div class="cat-head"><span>Parts pulled to this job</span></div>
+    <div class="mini hd"><span>Part</span><span>Qty</span><span>Value</span></div>
+    ${used.map(t => `<div class="mini">
+      <div><div class="pn">${esc(t.partNumber)}</div><div class="desc">${esc(t.description)}</div></div>
+      <div class="pn" style="text-align:center">${t.qty}</div>
+      <div class="pn" style="text-align:right">${money(t.extended)}</div>
+    </div>`).join('')}` : '<p class="note">Nothing pulled to this job yet.</p>';
+  openSheet('s-project');
+}
+
+async function saveProject() {
+  const name = $('pj-name').value.trim();
+  if (!name) { $('pj-msg').innerHTML = '<div class="err">Give the project a name.</div>'; return; }
+  const r = await apiPost({
+    action: 'saveProject', projectId: editingProject, name,
+    status: $('pj-status').value, notes: $('pj-notes').value.trim()
+  });
+  if (!r.ok) { $('pj-msg').innerHTML = `<div class="err">${esc(r.error)}</div>`; return; }
+  closeSheet('s-project');
+  await apiGet();
+}
+
+/* ---------------- boot ------------------------------------------- */
+$('inv-q').addEventListener('input', renderInventory);
+$('pull-q').addEventListener('input', renderPull);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) apiGet(); });
+
+if (API_URL.startsWith('PASTE_')) {
+  setStatus('not set up', 'bad');
+  $('inv-list').innerHTML = `<div class="empty"><strong>Almost there</strong>
+    Open index.html and paste your Apps Script URL into API_URL near the bottom,
+    then reload.</div>`;
+} else {
+  apiGet();
+}
+</script>
+</body>
+</html>
